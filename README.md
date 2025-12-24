@@ -6,7 +6,7 @@ SymRadar performs patch verification by covering near the ciritical input-space 
 ## Directory Structure
 ### symradar
 This is our main technical contribution.
-It contains UNI-KLEE (**UN**der-constra**I**ned [KLEE](https://github.com/klee/klee)), our implementation of KLEE-based symbolic execution tool which supports under-constrained symbolic execution and lazy initialization.
+It contains KLEE-based symbolic execution tool which supports under-constrained symbolic execution and lazy initialization.
 It can handle concrete snapshot extraction, abstract snapshot construction from concrete snapshot, and patch verification based on UC-SE and lazy initialization. Several optimizations and heuristics are applied to support such features.
 
 ### Benchmarks
@@ -61,7 +61,7 @@ patched
 
 ### 3. Analyzing the results
 ```
-symradar.py analyze 14498 -p high
+symradar.py analyze 19664 -p high
 ```
 You can look `patched/high-0/table_v3.sbsv` file to get experiment result.
 ```log

@@ -75,50 +75,6 @@ experiments.py analyze --extra analyze -s high
 experiments.py final -s high
 ```
 
-Old
-```
-# 5. Run fuzzer (for single)
-symfeas.py fuzz-build 5321 # ./aflrun.sh
-symfeas.py fuzz 5321
-symfeas.py collect-inputs 5321
-# 5. Run fuzzer (for all)
-experiments.py feas --extra fuzz
-experiments.py feas --extra collect-inputs
-experiments.py feas --extra fuzz-build
-
-# 6. Symbolic input validation (for single)
-symradar.py symgroup 5321
-symradar.py symgroup 5321 -p high
-symfeas.py val-build 5321 -s high # ./val.sh, Some subjects requires uni-klee-out-dir/base-mem.symbolic-globals - Run symradar first to generate output directory and files
-symfeas.py val 5321
-symfeas.py val 5321 -s high
-symfeas.py feas 5321
-symfeas.py feas 5321 -s high
-# 6. Symbolic input validation (for all)
-experiments.py analyze --extra symgroup
-experiments.py analyze --extra symgroup -s high
-experiments.py feas --extra val-build -s high
-experiments.py feas --extra val
-experiments.py feas --extra val -s high
-exepriments.py feas --extra feas
-exepriments.py feas --extra feas -s high
-
-# 7. Analyze input validation: Check ./out directory and get results
-experiments.py feas --extra analyze --seq --output out.csv
-experiments.py feas --extra analyze -s high --seq --output out-high.csv
-```
-
-## Test
-First, filter out patches that fails on test
-```shell
-python3 scripts/meta-program.py filter 5321
-```
-
-
-```shell
-python3 scripts/meta-test.py run 5321:0,1,2,3,4
-```
-
 [![Docker Pulls](https://img.shields.io/docker/pulls/rshariffdeen/cpr.svg)](https://hub.docker.com/r/rshariffdeen/cpr) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4668317.svg)](https://doi.org/10.5281/zenodo.4668317)
 
 # CPR - CardioPulmonary Resuscitation
@@ -213,5 +169,3 @@ This work was partially supported by the National Satellite of Excellence in Tru
 
 # License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
-
-
