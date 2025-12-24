@@ -193,76 +193,130 @@ struct MemArchive2 {
   uint64_t size;
   const Array *arr;
   const MemoryObject *mo;
-  std::vector<uint8_t> data; // It can be empty for lazy init
-  // constantMap is used to track which bytes are concrete (true)
-  std::vector<bool> constantMap;
+  std::shared_ptr<std::vector<uint8_t>> data;
+  std::shared_ptr<std::vector<bool>> constantMap;
+
   MemArchive2()
       : isPtr(false), isValue(false), address(0), size(0), arr(nullptr),
-        mo(nullptr) {}
+        mo(nullptr), data(std::make_shared<std::vector<uint8_t>>()),
+        constantMap(std::make_shared<std::vector<bool>>()) {}
+
   MemArchive2(bool isPtr, bool isValue, uint64_t address, uint64_t size,
               const Array *arr, const MemoryObject *mo,
-              std::vector<uint8_t> &data, std::vector<bool> &constantMap)
+              std::shared_ptr<std::vector<uint8_t>> data,
+              std::shared_ptr<std::vector<bool>> constantMap)
       : isPtr(isPtr), isValue(isValue), address(address), size(size), arr(arr),
         mo(mo), data(data), constantMap(constantMap) {}
+
   void symbolizeAt(uint32_t index) {
-    if (index < constantMap.size()) {
-      constantMap[index] = false;
+    if (index < constantMap->size()) {
+      (*constantMap)[index] = false;
     } else {
-      // Handle error: index out of bounds
       klee_error("Index out of bounds for constantMap");
     }
   }
+
   void concretizeAt(uint32_t index) {
-    if (index < constantMap.size()) {
-      constantMap[index] = true;
+    if (index < constantMap->size()) {
+      (*constantMap)[index] = true;
     } else {
-      // Handle error: index out of bounds
       klee_error("Index out of bounds for constantMap");
     }
   }
+
   bool isConcreteAt(uint32_t index) const {
-    if (index < constantMap.size()) {
-      return constantMap[index];
+    if (index < constantMap->size()) {
+      return (*constantMap)[index];
     } else {
-      // Handle error: index out of bounds
       klee_error("Index out of bounds for constantMap");
       return false;
     }
   }
+
+  int getConcreteSize() const { return constantMap->size(); }
+
+  uint8_t getConcreteValueAt(uint32_t index) const {
+    if (index < data->size()) {
+      return (*data)[index];
+    } else {
+      klee_error("Index out of bounds for data");
+      return 0;
+    }
+  }
 };
 
-struct MemArchive {
-  bool isPtr;
-  bool existing;
-  uint64_t originalBase;
-  uint64_t originalOffset;
-  uint64_t originalSize;
-  uint64_t address;
-  uint64_t base;
+struct AccessLog {
   uint64_t size;
-  uint64_t requestedAddr;
-  std::vector<uint8_t> data;
-  MemArchive()
-      : isPtr(false), existing(false), originalBase(0), originalOffset(0),
-        originalSize(0), address(0), base(0), size(0), requestedAddr(0) {}
-  MemArchive(bool isPtr, bool existing, uint64_t address, uint64_t base,
-             uint64_t size, std::vector<uint8_t> &data, uint64_t originalBase,
-             uint64_t originalOffset, uint64_t originalSize)
-      : isPtr(isPtr), existing(existing), address(address), base(base),
-        size(size), data(data), originalBase(originalBase),
-        originalOffset(originalOffset), originalSize(originalSize),
-        requestedAddr(0) {}
-  void resetOriginalForLazy(bool existing, uint64_t requestedAddr,
-                            uint64_t base, uint64_t size) {
-    isPtr = false;
-    existing = existing;
-    originalBase = base;
-    originalOffset = 0;
-    originalSize = size;
-    this->requestedAddr = requestedAddr;
-    this->base = base;
-    this->size = size;
-    this->address = base;
+  std::vector<uint8_t> accessMap;
+  std::vector<ref<Expr>> data;
+
+  AccessLog() : size(0) {}
+
+  AccessLog(uint64_t size) : size(size) {
+    for (int i = 0; i < size; i++) {
+      accessMap.push_back(0);
+      data.push_back(nullptr);
+    }
+  }
+
+  void update(uint64_t offset, uint64_t s, ref<Expr> e) {
+    if (offset + s <= size) {
+      // Check for writes of constant values.
+      if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e)) {
+        Expr::Width w = CE->getWidth();
+        uint64_t value = CE->getZExtValue();
+        if (w <= 64 && klee::bits64::isPowerOfTwo(w)) {
+          uint64_t val = CE->getZExtValue();
+          switch (w) {
+          default:
+            assert(0 && "Invalid write size!");
+          case Expr::Bool:
+          case Expr::Int8:
+            accessMap[offset] = 1;
+            data[offset] = CE;
+            return;
+          case Expr::Int16:
+            for (unsigned i = 0; i != 2; i++) {
+              unsigned idx = Context::get().isLittleEndian() ? i : (2 - i - 1);
+              accessMap[offset + idx] = 1;
+              data[offset + idx] =
+                  ConstantExpr::create((uint8_t)(value >> (8 * i)), Expr::Int8);
+            }
+            return;
+          case Expr::Int32:
+            for (unsigned i = 0; i != 4; i++) {
+              unsigned idx = Context::get().isLittleEndian() ? i : (4 - i - 1);
+              accessMap[offset + idx] = 1;
+              data[offset + idx] =
+                  ConstantExpr::create((uint8_t)(value >> (8 * i)), Expr::Int8);
+            }
+            return;
+          case Expr::Int64:
+            for (unsigned i = 0; i != 8; i++) {
+              unsigned idx = Context::get().isLittleEndian() ? i : (8 - i - 1);
+              accessMap[offset + idx] = 1;
+              data[offset + idx] =
+                  ConstantExpr::create((uint8_t)(value >> (8 * i)), Expr::Int8);
+            }
+            return;
+          }
+        }
+      }
+      Expr::Width w = e->getWidth();
+      // Treat bool specially, it is the only non-byte sized write we allow.
+      if (w == Expr::Bool) {
+        e = ZExtExpr::create(e, Expr::Int8);
+      }
+
+      // Otherwise, follow the slow general case.
+      unsigned NumBytes = w / 8;
+      assert(w == NumBytes * 8 && "Invalid write size!");
+      for (unsigned i = 0; i != NumBytes; ++i) {
+        unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
+        accessMap[offset + idx] = 1;
+        data[offset + idx] = ExtractExpr::create(e, 8 * i, Expr::Int8);
+      }
+    }
   }
 };
 
@@ -306,6 +360,8 @@ public:
 
   mutable int depth;
 
+  bool isLocalAfterTarget;
+
   // DO NOT IMPLEMENT
   MemoryObject(const MemoryObject &b);
   MemoryObject &operator=(const MemoryObject &b);
@@ -316,7 +372,7 @@ public:
       : refCount(0), id(counter++), address(_address), size(0), name(""),
         isSymbolicSize(false), minSymbolicSize(0), maxSymbolicSize(0),
         isFixed(true), kind(MemKind::invalid), type(nullptr), parent(NULL),
-        allocSite(0), depth(0) {}
+        allocSite(0), depth(0), isLocalAfterTarget(false) {}
 
   MemoryObject(uint64_t _address, unsigned _size, bool _isLocal, bool _isGlobal,
                bool _isFixed, const llvm::Value *_allocSite,
@@ -325,7 +381,8 @@ public:
         isSymbolicSize(false), minSymbolicSize(0), maxSymbolicSize(0),
         isLocal(_isLocal), isGlobal(_isGlobal), isFixed(_isFixed),
         isUserSpecified(false), kind(MemKind::invalid), type(nullptr),
-        parent(_parent), allocSite(_allocSite), depth(0) {}
+        parent(_parent), allocSite(_allocSite), depth(0),
+        isLocalAfterTarget(false) {}
 
   ~MemoryObject();
 

@@ -137,6 +137,8 @@ ExecutionState::ExecutionState(const ExecutionState &state)
       shadowConstraints(state.shadowConstraints),
       patchDataManager(state.patchDataManager),
       lazyObjectSizeMap(state.lazyObjectSizeMap),
+      writeAccessLog(state.writeAccessLog),
+      baseWriteAccessLog(state.baseWriteAccessLog),
       shadowMemory(state.shadowMemory), targetStack(state.targetStack),
       incomingBBIndex(state.incomingBBIndex),
 
@@ -189,8 +191,13 @@ void ExecutionState::popFrame() {
   StackFrame &sf = stack.back();
   for (std::vector<const MemoryObject *>::iterator it = sf.allocas.begin(),
                                                    ie = sf.allocas.end();
-       it != ie; ++it)
+       it != ie; ++it) {
     addressSpace.unbindObject(*it);
+    if (writeAccessLog.size() > 0 && writeAccessLog.count(*it) > 0) {
+      writeAccessLog.erase(*it);
+    }
+  }
+
   stack.pop_back();
 }
 
@@ -211,9 +218,11 @@ void ExecutionState::addConstraint(ref<Expr> e) {
   constraints.addConstraint(e);
   if (metaData.isTypeBase()) {
     llvm::StringRef filename(pc->info->file);
-    if (!filename.endswith("uni_klee_runtime_new.c") && !taintMarker) {
-      SPDLOG_DEBUG("[state {}] Adding constraint: {} in {}", this->getID(),
-                   e->str(), pc->getSourceLocation());
+    if ((pc->inst->getFunction()->getName().str() == "__cpr_choice") || ((!filename.endswith("uni_klee_runtime_new.c")) &&
+        !taintMarker)) {
+      SPDLOG_DEBUG("[state {}] Adding constraint: {} in {} ({})", this->getID(),
+                   e->str(), pc->getSourceLocation(),
+                   pc->inst->getFunction()->getName().str());
       shadowConstraints.addConstraint(e);
     } else {
       SPDLOG_DEBUG("[state {}] Skipping constraint: {} in {} - taint {}",

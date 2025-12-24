@@ -39,6 +39,27 @@ using namespace llvm;
 
 namespace klee {
 
+static bool isUBSanConstant(const llvm::Constant *c) {
+  // Check if this is a UBSan-related constant
+  if (const llvm::GlobalValue *gv = dyn_cast<llvm::GlobalValue>(c)) {
+    StringRef name = gv->getName();
+    if (name.empty()) {
+      if (const GlobalVariable *gvar = dyn_cast<GlobalVariable>(gv)) {
+        Type *elementType = gvar->getType()->getElementType();
+        // UBSan constants are often structs or arrays with specific patterns
+        if (StructType *st = dyn_cast<StructType>(elementType)) {
+          // Check if it looks like UBSan metadata structure
+          return st->getNumElements() > 0;
+        }
+      }
+      return false; // Be conservative - only handle if we're confident
+    }
+    return name.startswith("__ubsan_") || name.startswith("_ZN7__ubsan") ||
+           name.contains("OverflowData") || name.contains("TypeDescriptor");
+  }
+  return false;
+}
+
 ref<klee::ConstantExpr> Executor::evalConstant(const Constant *c,
                                                const KInstruction *ki) {
   if (!ki) {
@@ -55,7 +76,32 @@ ref<klee::ConstantExpr> Executor::evalConstant(const Constant *c,
     } else if (const ConstantFP *cf = dyn_cast<ConstantFP>(c)) {
       return ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
     } else if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
-      return globalAddresses.find(gv)->second;
+      auto it = globalAddresses.find(gv);
+      if (it != globalAddresses.end())
+        return globalAddresses.find(gv)->second;
+      // Try to lazily populate or give a good error, rather than crashing.
+      if (isUBSanConstant(c)) {
+        SPDLOG_DEBUG("Skip ubsan var {} at {}", gv->getName().str(),
+                     ki->getSourceLocation());
+        return Expr::createPointer(0);
+      }
+      if (auto *ga = dyn_cast<GlobalAlias>(gv)) {
+        ref<ConstantExpr> aliasee = evalConstant(ga->getAliasee(), ki);
+        globalAddresses.emplace(gv, aliasee);
+        return aliasee;
+      }
+      if (auto *f = dyn_cast<Function>(gv)) {
+        // Give the function a stable “address” so constants can fold.
+        auto addr = Expr::createPointer(reinterpret_cast<std::uint64_t>(f));
+        globalAddresses.emplace(gv, cast<ConstantExpr>(addr));
+        return cast<ConstantExpr>(addr);
+      }
+
+      std::string msg("Reference to unmapped global '");
+      llvm::raw_string_ostream os(msg);
+      os << gv->getName() << "' at "
+         << (ki ? ki->getSourceLocation() : "[unknown]");
+      klee_error("%s", os.str().c_str());
     } else if (isa<ConstantPointerNull>(c)) {
       return Expr::createPointer(0);
     } else if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c)) {
@@ -130,6 +176,8 @@ ref<klee::ConstantExpr> Executor::evalConstant(const Constant *c,
       const auto res =
           Expr::createPointer(reinterpret_cast<std::uint64_t>(arg_bb));
       return cast<ConstantExpr>(res);
+    } else if (isUBSanConstant(c)) {
+      return Expr::createPointer(0);
     } else {
       std::string msg("Cannot handle constant ");
       llvm::raw_string_ostream os(msg);

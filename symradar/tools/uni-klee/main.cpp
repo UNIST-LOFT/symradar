@@ -161,6 +161,10 @@ cl::opt<bool> WithPOSIXRuntime(
              "<min-argvs> <max-argvs> <max-len> + file model options"),
     cl::init(true));
 
+cl::opt<bool> WithUBSanRuntime("ubsan-runtime",
+                               cl::desc("Link with UBSan runtime."),
+                               cl::init(false));
+
 cl::opt<bool> OptimizeModule("optimize", cl::desc("Optimize before execution"),
                              cl::init(false));
 
@@ -538,15 +542,15 @@ void KleeHandler::setLogger() {
   else
     console->set_level(spdlog::level::debug);
   console->set_pattern("[%m-%d_%H:%M:%S] %^[%L] %v%$");
-  size_t max_size = 128 * 1024 * 1024; // 128MB
+  size_t max_size = 256 * 1024 * 1024; // 256MB
   std::string filename = getOutputFilename("uni-klee.trace.log");
   auto file_trace = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-      filename, max_size, 5);
+      filename, max_size, 10);
   file_trace->set_level(spdlog::level::trace);
   file_trace->set_pattern("[%Y-%m-%d_%H:%M:%S.%e] [%L] %v # %!:%#");
   filename = getOutputFilename("uni-klee.debug.log");
   auto file_debug = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-      filename, max_size, 5);
+      filename, max_size, 10);
   file_debug->set_level(spdlog::level::debug);
   file_debug->set_pattern("[%Y-%m-%d_%H:%M:%S.%e] [%L] %v # %!:%#");
   filename = getOutputFilename("uni-klee.info.log");
@@ -932,10 +936,6 @@ static const char *modelledExternals[] = {
     "_Znwj",
     "_Znam",
     "_Znwm",
-    "__ubsan_handle_add_overflow",
-    "__ubsan_handle_sub_overflow",
-    "__ubsan_handle_mul_overflow",
-    "__ubsan_handle_divrem_overflow",
 };
 // Symbols we aren't going to warn about
 static const char *dontCareExternals[] = {
@@ -1416,6 +1416,15 @@ int main(int argc, char **argv, char **envp) {
 
     std::string libcPrefix = (Libc == LibcType::UcLibc ? "__user_" : "");
     preparePOSIX(loadedModules, libcPrefix);
+  }
+
+  if (WithUBSanRuntime) {
+    SmallString<128> Path(Opts.LibraryDir);
+    llvm::sys::path::append(Path, "libkleeUBSan64.bca");
+    if (!klee::loadFile(Path.c_str(), mainModule->getContext(), loadedModules,
+                        errorMsg))
+      klee_error("error loading UBSan support '%s': %s", Path.c_str(),
+                 errorMsg.c_str());
   }
 
   switch (Libc) {

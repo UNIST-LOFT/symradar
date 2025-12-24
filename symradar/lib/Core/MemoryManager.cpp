@@ -124,7 +124,9 @@ MemoryObject *MemoryManager::allocate(uint64_t size, bool isLocal,
     // Handle the case of 0-sized allocations as 1-byte allocations.
     // This way, we make sure we have this allocation between its own red zones
     size_t alloc_size = std::max(size, (uint64_t)1);
-    if ((char *)address + alloc_size < deterministicSpace + spaceSize) {
+    char *end_of_allocation = (char *)address + alloc_size;
+    if (end_of_allocation >= deterministicSpace &&
+        end_of_allocation < deterministicSpace + spaceSize) {
       nextFreeSlot = (char *)address + alloc_size + RedZoneSpace;
     } else {
       klee_warning_once(0,

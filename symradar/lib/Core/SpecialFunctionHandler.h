@@ -151,11 +151,6 @@ public:
   HANDLER(handleUnderConstrained);
   HANDLER(handleWarning);
   HANDLER(handleWarningOnce);
-  HANDLER(handleAddOverflow);
-  HANDLER(handleShiftOverflow);
-  HANDLER(handleMulOverflow);
-  HANDLER(handleSubOverflow);
-  HANDLER(handleDivRemOverflow);
 #undef HANDLER
 };
 } // namespace klee

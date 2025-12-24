@@ -91,6 +91,10 @@ ExternalProject_Add(BuildKLEERuntimes
   INSTALL_COMMAND "${CMAKE_COMMAND}" -E echo "" # Dummy command
 )
 
+list(APPEND RUNTIME_LIBRARIES UBSan)
+add_subdirectory(Sanitizer)
+add_dependencies(BuildKLEERuntimes UBSan)
+
 set(O0OPT "-O0")
 if (${LLVM_VERSION_MAJOR} GREATER 4)
 	set(O0OPT "${O0OPT} -Xclang -disable-O0-optnone")
@@ -129,6 +133,7 @@ list(APPEND RUNTIME_FILES_TO_INSTALL
   "${KLEE_RUNTIME_DIRECTORY}/libkleeRuntimeIntrinsic.bca"
   "${KLEE_RUNTIME_DIRECTORY}/libklee-libc.bca"
   "${KLEE_RUNTIME_DIRECTORY}/libkleeRuntimeFreeStanding.bca"
+  "${KLEE_RUNTIME_DIRECTORY}/libkleeUBSan64.bca"
   )
 
 if (ENABLE_POSIX_RUNTIME)

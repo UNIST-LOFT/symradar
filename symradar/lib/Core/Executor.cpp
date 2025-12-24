@@ -218,6 +218,10 @@ cl::opt<bool> MakeAllParameterSymbolic(
     "make-all-parameter-symbolic", cl::init(false),
     cl::desc("Make all value typed arguments symbolic"));
 
+cl::opt<bool> MakeFieldSymbolicAll(
+    "make-field-symbolic-all", cl::init(true),
+    cl::desc("Make struct fields symbolic instead of whole struct"));
+
 cl::list<int> PatchID("patch-id",
                       cl::desc("Patch ID to be used for the execution"),
                       cl::value_desc("0,1,3"), cl::CommaSeparated);
@@ -698,6 +702,10 @@ void Executor::StateGroup::handleCrashState(ExecutionState *state) {
         fmt::format("[fork-map] [merge] [state {}] -> [state {}] [patch {}]",
                     state->getID(), ns->getID(), ns->metaData.getPatchID()));
     addForkParent(ns);
+    // Only copy writeAccessLog if the base state did not crash
+    if (!state->metaData.getActuallyCrashed()) {
+      ns->baseWriteAccessLog = state->writeAccessLog;
+    }
     // addFork(state, ns);
     std::vector<ref<Expr>> shadowConstraints;
     for (auto &shadowConstraint : state->shadowConstraints) {
@@ -1729,7 +1737,8 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
   if (!success) {
     current.pc = current.prevPC;
     terminateStateEarly(current, "Query timed out (fork).");
-    SPDLOG_DEBUG("[state {}] fork: query timed out", current.getID());
+    SPDLOG_DEBUG("[state {}] fork: query timed out for {}", current.getID(),
+                 condition->str());
     return StatePair(0, 0);
   }
   if (!isSeeding) {
@@ -2277,8 +2286,7 @@ static inline const llvm::fltSemantics *fpWidthToSemantics(unsigned width) {
   }
 }
 
-void Executor::initUniKleeAtEntry(ExecutionState &state, const KFunction *kf,
-                                  Snapshot *snapshot) {
+void Executor::initUniKleeAtEntry(ExecutionState &state, const KFunction *kf) {
   llvm::Function *uf = kmodule->module->getFunction("uni_klee_make_symbolic");
   llvm::Function *ef = kmodule->module->getFunction("extractfix_make_symbolic");
   llvm::Function *rf =
@@ -2428,6 +2436,10 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
     return;
   }
   if (f && f->isDeclaration()) {
+    if (f->getName().str() == "malloc") {
+      SPDLOG_DEBUG("[state {}] malloc called at {} size {}", state.getID(),
+                   ki->getSourceLocation(), arguments[0]->str());
+    }
     switch (f->getIntrinsicID()) {
     case Intrinsic::not_intrinsic:
       // state may be destroyed by this call, cannot touch
@@ -2631,7 +2643,7 @@ void Executor::executeCall(ExecutionState &state, KInstruction *ki, Function *f,
           getSnapshot(state, f, ki, arguments, snapshotId, snapshotName);
       if (executionType == ExecutionType::MakeSnapshot) {
         state.targetStack.push_back(state.stack.back());
-        initUniKleeAtEntry(state, kf, nullptr);
+        initUniKleeAtEntry(state, kf);
       }
     }
     std::string TmpStr;
@@ -3324,6 +3336,91 @@ void Executor::exportSymbolicInput(
     } else {
       symbolicConstraint["position"] = "post";
     }
+  }
+  // Check regression
+  if (NonCondPatch && state.metaData.isType(StateType::ST_crash_test) &&
+      !state.metaData.getIsCrash() && !state.metaData.getActuallyCrashed()) {
+    bool regressionError = false;
+    std::string regressionReason = "ok";
+    // Too many false alarms!
+    // 1. Only check write accesses exist in base
+    if (state.baseWriteAccessLog.size() != state.writeAccessLog.size()) {
+      SPDLOG_DEBUG("[state {}] Check regression failed due to different write "
+                   "access count {} vs {}",
+                   state.getID(), state.writeAccessLog.size(),
+                   state.baseWriteAccessLog.size());
+    }
+    for (auto &it : state.baseWriteAccessLog) {
+      const MemoryObject *mo = it.first;
+      AccessLog baseLog = it.second;
+      if (state.writeAccessLog.count(mo) == 0) {
+        regressionError = true;
+        regressionReason = "omitted-access";
+        SPDLOG_DEBUG("[state {}] Check regression failed due to omitted "
+                     "write access ({}) / {}",
+                     state.getID(), mo->address, state.writeAccessLog.size());
+        break;
+      }
+      AccessLog stateLog = state.writeAccessLog.at(mo);
+      ref<Expr> cond = ConstantExpr::alloc(1, Expr::Bool);
+      for (int i = 0; i < stateLog.size; i++) {
+        if (stateLog.accessMap[i] != baseLog.accessMap[i]) {
+          regressionError = true;
+          regressionReason = "diff-access";
+          SPDLOG_DEBUG("[state {}] Check regression failed due to different "
+                       "write access ({}+{}) {} vs {} / {}",
+                       state.getID(), mo->address, i, stateLog.accessMap[i],
+                       baseLog.accessMap[i], stateLog.size);
+          break;
+        }
+        if (stateLog.accessMap[i] != 0) {
+          if (stateLog.data[i] != baseLog.data[i]) {
+            cond = AndExpr::create(
+                cond, EqExpr::create(stateLog.data[i], baseLog.data[i]));
+            if (isa<ConstantExpr>(cond) &&
+                cast<ConstantExpr>(cond)->isFalse()) {
+              regressionError = true;
+              regressionReason = "diff-data";
+              SPDLOG_DEBUG(
+                  "[state {}] Check regression failed due to different write "
+                  "data ({}+{}) {} vs {} / {}",
+                  state.getID(), mo->address, i, stateLog.data[i]->str(),
+                  baseLog.data[i]->str(), stateLog.size);
+              break;
+            }
+          }
+        }
+      }
+      if (!regressionError) {
+        // Add constraint
+        if (!cond->isTrue()) {
+          solver->setTimeout(coreSolverTimeout);
+          bool res;
+          bool success = solver->mayBeTrue(state, cond, res);
+          solver->setTimeout(time::Span());
+          if (success && !res) {
+            regressionError = true;
+            regressionReason = "unsat";
+            SPDLOG_DEBUG("[state {}] Check regression failed due to unsat "
+                         "constraint {} {} / {}",
+                         state.getID(), mo->address, cond->str(),
+                         stateLog.size);
+            break;
+          } else if (!success) {
+            regressionError = true;
+            regressionReason = "timeout";
+            SPDLOG_DEBUG("[state {}] Check regression failed due to timeout",
+                         state.getID());
+            break;
+          }
+        }
+      }
+      if (regressionError)
+        break;
+    }
+    klee_log_data(fmt::format(
+        "[non-cond-reg] [state {}] [patch {}] [regression {}]", state.getID(),
+        state.metaData.getCrashID(), regressionReason));
   }
   // 3. Use json format
   Json::StreamWriterBuilder builder;
@@ -5445,7 +5542,7 @@ void Executor::executeInstructionWrapper(ExecutionState &state,
         if (baseSnapshot->snapshotId == currentSnapshotId) {
           SPDLOG_INFO("[state {}] Reached snapshot location {}:{}",
                       state.getID(), funcName.c_str(), currentSnapshotId);
-          initUniKleeAtEntry(state, kf, baseSnapshot);
+          initUniKleeAtEntry(state, kf);
           std::vector<ref<Expr>> arguments;
           makeSymbolicFromSnapshot(state, baseSnapshot, f, arguments);
           // Run the target function from snapshot
@@ -5709,6 +5806,7 @@ MemoryObject *Executor::lazyAllocation(ExecutionState &state, ref<Expr> addr,
       mo->isSymbolicSize = true;
       mo->minSymbolicSize = typeSize;
       mo->maxSymbolicSize = maxSize;
+      mo->depth = depth + 1;
       executeMakeSymbolic(state, mo, "", false);
       newArray = state.symbolics.back().getArray();
       lazyInitManager.trackBaseAddr(addr, mo);
@@ -6240,11 +6338,11 @@ void Executor::terminateState(ExecutionState &state, std::string msg,
                                      "extractfix"};
   bool check = !state.targetStack.empty() && state.passedTarget &&
                suffixSet.count(suffix) > 0;
-  SPDLOG_INFO(
-      "[state {}] [patch {}, crash {}, type {}] Terminating with {} - {} at {}",
-      state.getID(), state.metaData.getPatchID(), state.getCrashID(),
-      state.metaData.getStateType(), suffix, msg,
-      state.prevPC->getSourceLocation());
+  SPDLOG_INFO("[state {}] [patch {}, crash {}, type {}] Terminating with {} - "
+              "{} at {}, check {}",
+              state.getID(), state.metaData.getPatchID(), state.getCrashID(),
+              state.metaData.getStateType(), suffix, msg,
+              state.prevPC->getSourceLocation(), check);
 
   if (!suffixRef.endswith("err")) {
     std::string tmp;
@@ -6260,7 +6358,23 @@ void Executor::terminateState(ExecutionState &state, std::string msg,
                                         suffix.c_str());
   }
 
+  std::string exitLoc = state.prevPC->getSourceLocation();
+
   if (check) {
+    KInstruction *target = state.prevPC;
+    // for (ExecutionState::stack_ty::const_reverse_iterator
+    //          it = state.stack.rbegin(),
+    //          ie = state.stack.rend();
+    //      it != ie; ++it) {
+    //   const StackFrame &sf = *it;
+    //   Function *f = sf.kf->function;
+    //   if (f == targetFunctionAddr) {
+    //     const InstructionInfo *ii = target->info;
+    //     exitLoc = fmt::format("{}:{}:{}:{}", ii->file, ii->line, ii->column,
+    //     ii->assemblyLine); break;
+    //   }
+    //   target = sf.caller;
+    // }
     if (state.metaData.isType(StateType::ST_base_after)) {
       state.metaData.setIsCrash(suffixRef.endswith("err"));
       // If not crash, it does not need to be replayed
@@ -6282,8 +6396,7 @@ void Executor::terminateState(ExecutionState &state, std::string msg,
       "[isCrash {}] [actuallyCrashed {}] [use {}] [exitLoc {}] [exit {}]",
       state.getID(), state.getCrashID(), state.metaData.getPatchID(),
       state.metaData.getStateType(), state.metaData.getIsCrash(),
-      state.metaData.getActuallyCrashed(), check,
-      state.prevPC->getSourceLocation(), suffix));
+      state.metaData.getActuallyCrashed(), check, exitLoc, suffix));
   if (!state.targetStack.empty()) {
     StackFrame *sf = &state.targetStack.back();
     std::stringstream rss;
@@ -7144,8 +7257,7 @@ void Executor::onPtrAccess(ExecutionState &state, uint64_t source,
   // Check if target memory object is in address space to reduce waste
   ObjectPair op;
   bool success = false;
-  if ((concreteValue >= 0x7ff30000000) &&
-      (concreteValue < 0x7ff30000000 + 100 * 1048576)) {
+  if (memory->isValidAddress(concreteValue)) {
     solver->setTimeout(coreSolverTimeout);
     success = state.addressSpace.resolveOne(
         ConstantExpr::create(concreteValue, 64), op);
@@ -7210,10 +7322,14 @@ void Executor::executeAlloc(ExecutionState &state, ref<Expr> size, bool isLocal,
         memory->allocate(CE->getZExtValue(), isLocal, /*isGlobal=*/false,
                          allocSite, allocationAlignment);
     if (!mo) {
+      SPDLOG_DEBUG("[state {}] Memory allocation failed", state.getID());
       bindLocal(target, state,
                 ConstantExpr::alloc(0, Context::get().getPointerWidth()));
 
     } else {
+      if (isLocal && state.targetStack.size() > 0) {
+        mo->isLocalAfterTarget = true;
+      }
       std::string name = "";
       if (allocaInst != nullptr) {
         if (allocaInst->hasName()) {
@@ -7238,7 +7354,10 @@ void Executor::executeAlloc(ExecutionState &state, ref<Expr> size, bool isLocal,
         }
 
       } else {
-        SPDLOG_TRACE("Not alloca inst...");
+        SPDLOG_DEBUG("[state {}] Memory allocation malloc: addr {}, size {}, "
+                     "name {} at {}",
+                     state.getID(), mo->address, mo->size, name,
+                     target->getSourceLocation());
       }
 
       ObjectState *os = bindObjectInState(state, mo, isLocal);
@@ -7380,6 +7499,9 @@ void Executor::executeFree(ExecutionState &state, ref<Expr> address,
           bindLocal(target, *it->second, Expr::createPointer(0));
           specialFunctionHandler->trackMemory(state, target->inst->getType(),
                                               address, Expr::createPointer(0));
+        }
+        if (NonCondPatch && state.writeAccessLog.count(mo) > 0) {
+          state.writeAccessLog.erase(mo);
         }
       }
     }
@@ -7847,6 +7969,13 @@ void Executor::handleSymbolicPointer(ExecutionState &state, bool isWrite,
       }
     }
     candidate = toConstant(*nonNullState, address, "resolveOne failure");
+    ObjectPair op2;
+    bool success = nonNullState->addressSpace.resolveOne(candidate, op2);
+    if (!success) {
+      terminateStateEarly(*nonNullState,
+                          "Failed to concretize symbolic address");
+      return;
+    }
     executeMemoryOperation(*nonNullState, isWrite, candidate, value, target);
   }
 }
@@ -7973,7 +8102,54 @@ void Executor::executeMemoryOperation(
           ObjectState *wos = state.addressSpace.getWriteable(mo, os);
           // TODO: Check if the address is from lazy init
           bool isPointerType = (bytes == ptrWidth);
+          ref<Expr> original = wos->read(offset, type);
           wos->write(offset, value);
+          if (NonCondPatch && !mo->isLocalAfterTarget) {
+            // First, check if this exists in snapshot
+            bool sideEffect =
+                (executionType != ExecutionType::UnderConstrained &&
+                 baseSnapshot != nullptr &&
+                 baseSnapshot->memGraph.getMemNode(mo->address) != nullptr);
+            // Or created by lazy init
+            if (!sideEffect) {
+              if (state.lazyObjectSizeMap.count(mo) > 0) {
+                sideEffect = true;
+              }
+            }
+            // Log the write access
+            if (sideEffect) {
+              // Check if writing same value
+              bool isSameValue = false;
+              ref<Expr> eq = EqExpr::create(original, value);
+              solver->setTimeout(coreSolverTimeout);
+              bool success = solver->mustBeTrue(state, eq, isSameValue);
+              solver->setTimeout(time::Span());
+              if (!success || !isSameValue) {
+                // Different value
+                ref<Expr> writeValue = value;
+                if (isa<ConstantExpr>(value)) {
+                  ref<ConstantExpr> cvalue = dyn_cast<ConstantExpr>(value);
+                  uint64_t v = cvalue->getZExtValue();
+                  if (memory->isValidAddress(v)) {
+                    // Pointer value may change: write fixed value
+                    writeValue =
+                        ConstantExpr::create(0x11111111, cvalue->getWidth());
+                  }
+                }
+                if (state.writeAccessLog.count(mo) == 0)
+                  state.writeAccessLog[mo] = AccessLog(mo->size);
+                if (ConstantExpr *coffset = dyn_cast<ConstantExpr>(offset)) {
+                  SPDLOG_DEBUG(
+                      "[state {}] Write access: {}({}+{}) {} -> {} at {}",
+                      state.getID(), mo->name, mo->address,
+                      coffset->getZExtValue(), original->str(), value->str(),
+                      state.prevPC->getSourceLocation());
+                  state.writeAccessLog[mo].update(coffset->getZExtValue(),
+                                                  bytes, writeValue);
+                }
+              }
+            }
+          }
           if (!isa<ConstantExpr>(value)) {
             // Trace the symbolic write
             state.trackedSymbolicObjects[mo->address];
@@ -8186,17 +8362,20 @@ void Executor::executeMakeSymbolic(ExecutionState &state,
     mo->depth += 1;
     const ObjectState *os = state.addressSpace.findObject(mo);
     std::vector<uint8_t> data;
-    if (existing)
+    std::vector<bool> isConstant;
+    if (existing) {
       os->readConcreteStore(data);
+      isConstant = std::vector<bool>(mo->size, false);
+    }
     std::string uniqueName =
         getConsistentName(state, "sym", mo->address, mo->size);
     const Array *array = arrayCache.CreateArray(uniqueName, mo->size);
     bindObjectInState(state, mo, false, array);
     state.addSymbolic(mo, array);
 
-    std::vector<bool> isConstant(mo->size, false);
-    MemArchive2 ma(false, false, mo->address, mo->size, array, mo, data,
-                   isConstant);
+    MemArchive2 ma(false, false, mo->address, mo->size, array, mo,
+                   std::make_shared<std::vector<uint8_t>>(std::move(data)),
+                   std::make_shared<std::vector<bool>>(std::move(isConstant)));
     lazyInitManager.addOriginalObject(array, ma);
     // Add to the shadow memory
     // if (state.shadowAddressSpace.initialized) {
@@ -8305,8 +8484,10 @@ Executor::getSymbolicPointer(ExecutionState &state, const MemoryObject *mo) {
     ptrDataFlags.push_back(false);
   }
   pointerToData(ptrData, mo->address);
-  MemArchive2 ma = MemArchive2(true, true, mo->address, 8, addr.first, mo,
-                               ptrData, ptrDataFlags);
+  MemArchive2 ma =
+      MemArchive2(true, true, mo->address, 8, addr.first, mo,
+                  std::make_shared<std::vector<uint8_t>>(std::move(ptrData)),
+                  std::make_shared<std::vector<bool>>(std::move(ptrDataFlags)));
   lazyInitManager.addOriginalObject(addr.first, ma);
   state.symbolics.back().setSymPtr(mo->address);
   lazyInitManager.addSymbolicPointer(addr.first, 0, mo->address, mo, arr, true,
@@ -8349,6 +8530,9 @@ const Array *Executor::executeMakeFieldSymbolic(ExecutionState &state,
   for (auto &it : state.symbolics) {
     if (it.getMemoryObject() == mo) {
       // Already symbolic
+      if (!MakeFieldSymbolicAll) {
+        return it.getArray();
+      }
       SPDLOG_DEBUG("[state {}] Memory object {}({}) at {} already symbolic -> "
                    "make field symbolic at {} size {}",
                    state.getID(), mo->name, it.getArray()->getName(),
@@ -8356,35 +8540,58 @@ const Array *Executor::executeMakeFieldSymbolic(ExecutionState &state,
       MemArchive2 ma;
       lazyInitManager.getOriginalObject(it.getArray(), ma);
       const ObjectState *os = state.addressSpace.findObject(mo);
+      ref<Expr> concrete = os->read(offset, size * 8);
       ObjectState *wos = state.addressSpace.getWriteable(mo, os);
       UpdateList sourceUpdates(it.getArray(), nullptr);
       for (uint32_t i = offset; i < offset + size; i++) {
-        if (i < ma.constantMap.size()) {
+        if (i < ma.getConcreteSize()) {
           if (ma.isConcreteAt(i)) {
             ma.symbolizeAt(i);
             ref<Expr> value = ReadExpr::create(
                 sourceUpdates, ConstantExpr::create(i, Expr::Int32));
             wos->write(i, value);
+          } else {
+            SPDLOG_DEBUG("[state {}] offset {} already symbolic", state.getID(),
+                         i);
           }
+        } else {
+          SPDLOG_DEBUG("[state {}] offset {} out of bound (size {})",
+                       state.getID(), i, ma.size);
         }
       }
+      os = state.addressSpace.findObject(mo);
+      ref<Expr> check = os->read(offset, size * 8);
+      SPDLOG_DEBUG("[state {}] field symbolic result: {} -> {}", state.getID(),
+                   concrete->str(), check->str());
       return it.getArray();
     }
   }
+  const ObjectState *os = state.addressSpace.findObject(mo);
+  ref<Expr> concrete = os->read(offset, size * 8);
   executeMakeSymbolic(state, mo, name);
   // Concretize the other fields
   const Array *arr = state.symbolics.back().getArray();
   MemArchive2 ma;
-  lazyInitManager.getOriginalObject(arr, ma);
-  const ObjectState *os = state.addressSpace.findObject(mo);
+  if (!lazyInitManager.getOriginalObject(arr, ma)) {
+    klee_error("Cannot find original object of array %s",
+               arr->getName().c_str());
+  }
+  os = state.addressSpace.findObject(mo);
   ObjectState *wos = state.addressSpace.getWriteable(mo, os);
   for (uint32_t i = 0; i < mo->size; i++) {
-    if (i < ma.constantMap.size() && (i < offset || i >= offset + size)) {
+    if (i < ma.getConcreteSize() && (i < offset || i >= offset + size)) {
       ma.concretizeAt(i);
-      ref<Expr> value = ConstantExpr::create(ma.data[i], Expr::Int8);
+      ref<Expr> value =
+          ConstantExpr::create(ma.getConcreteValueAt(i), Expr::Int8);
       wos->write(i, value);
     }
   }
+  ref<Expr> check = wos->read(offset, size * 8);
+  SPDLOG_DEBUG(
+      "[state {}] Make field symbolic {} at {}({}) size {} in ({}) {} -> {}",
+      state.getID(), name, mo->address, offset, size,
+      state.symbolics.back().getArray()->getName(), concrete->str(),
+      check->str());
   return arr;
 }
 
@@ -8510,32 +8717,14 @@ std::vector<uint8_t> getDataFromConstantExpr(ref<klee::ConstantExpr> ce) {
 }
 
 ref<Expr> Executor::getConcreteValue(ExecutionState &state, ref<Expr> e) {
-
-  if (const MemoryObject *mo = lazyInitManager.getObjectFromSymbolicAddr(e)) {
-    std::set<uint64_t> baseAddrs;
-    ref<Expr> addrBoundCheck = mo->getBoundsCheckPointer(e);
-    bool inBounds;
-    solver->setTimeout(coreSolverTimeout);
-    bool success = solver->mayBeTrue(state, addrBoundCheck, inBounds);
-    solver->setTimeout(time::Span());
-    if (!success) {
-      state.pc = state.prevPC;
-      terminateStateEarly(state, "Query timed out (bounds check).");
-      return ConstantExpr::create(0, Expr::Int64);
-    }
-    if (inBounds) {
-      addConstraint(state, addrBoundCheck);
-      return toConstant(state, e, "getConcreteValue: in bounds", false);
-    }
-  }
-
-  e = state.constraints.simplifyExpr(e);
-  if (isa<ConstantExpr>(e)) {
-    return cast<ConstantExpr>(e);
+  ref<Expr> exp = state.constraints.simplifyExpr(e);
+  if (isa<ConstantExpr>(exp)) {
+    return cast<ConstantExpr>(exp);
   }
   // If the expression is not constant, we need to concretize it
+  SPDLOG_DEBUG("[state {}] getConcreteValue: {}", state.getID(), e->str());
   SymbolicAddressVisitor saVisitor;
-  saVisitor.visit(e);
+  saVisitor.visit(exp);
   std::map<const ReadExpr *, ref<Expr>> concreteValues;
   for (const ReadExpr *re : saVisitor.getReads()) {
     const Array *array = re->updates.root;
@@ -8548,8 +8737,9 @@ ref<Expr> Executor::getConcreteValue(ExecutionState &state, ref<Expr> e) {
     ref<Expr> index = re->index;
     if (isa<ConstantExpr>(index)) {
       uint64_t idx = cast<ConstantExpr>(index)->getZExtValue();
-      if (idx < ma.data.size()) {
-        ref<Expr> ce = ConstantExpr::create(ma.data[idx], Expr::Int8);
+      if (idx < ma.getConcreteSize()) {
+        ref<Expr> ce =
+            ConstantExpr::create(ma.getConcreteValueAt(idx), Expr::Int8);
         concreteValues.insert(std::make_pair(re, ce));
       } else {
         SPDLOG_DEBUG("[state {}] getConcreteValue: index {} no original data "
@@ -8572,10 +8762,30 @@ ref<Expr> Executor::getConcreteValue(ExecutionState &state, ref<Expr> e) {
     return e;
   }
   if (!result) {
+    // Last try
+    if (const MemoryObject *mo = lazyInitManager.getObjectFromSymbolicAddr(e)) {
+      std::set<uint64_t> baseAddrs;
+      ref<Expr> addrBoundCheck = mo->getBoundsCheckPointer(e);
+      bool inBounds;
+      solver->setTimeout(coreSolverTimeout);
+      bool success = solver->mayBeTrue(state, addrBoundCheck, inBounds);
+      solver->setTimeout(time::Span());
+      if (!success) {
+        state.pc = state.prevPC;
+        terminateStateEarly(state, "Query timed out (bounds check).");
+        return ConstantExpr::create(0, Expr::Int64);
+      }
+      if (inBounds) {
+        addConstraint(state, addrBoundCheck);
+        return toConstant(state, e, "getConcreteValue: in bounds", false);
+      }
+    }
     SPDLOG_DEBUG("[state {}] getConcreteValue: expression {} is not concrete",
-                 state.getID(), concreteExpr->str());
+                 state.getID(), e->str());
     return e;
   }
+  SPDLOG_DEBUG("[state {}] getConcreteValue: expression {} concretized to {}",
+               state.getID(), e->str(), concreteExpr->str());
   return concreteExpr;
 }
 
@@ -8654,8 +8864,10 @@ int Executor::makeSymbolicFromSnapshot(ExecutionState &state,
       data.resize(typeSize);
       ca->toMemory(data.data());
       std::vector<bool> isConstant(typeSize, false);
-      MemArchive2 ma(false, true, 0, typeSize, symVal.first, nullptr, data,
-                     isConstant);
+      MemArchive2 ma(
+          false, true, 0, typeSize, symVal.first, nullptr,
+          std::make_shared<std::vector<uint8_t>>(std::move(data)),
+          std::make_shared<std::vector<bool>>(std::move(isConstant)));
       lazyInitManager.addOriginalObject(symVal.first, ma);
       // lazyInitManager.addSymbolicValue(symVal.first, argExpr);
     } else {
@@ -8928,8 +9140,10 @@ int Executor::makeSymbolicFromSnapshot(ExecutionState &state,
       ObjectPair op;
       bool resolved =
           addrSpace.resolveOne(ConstantExpr::create(mr.base, Expr::Int64), op);
-      if (!resolved)
+      if (!resolved) {
+        SPDLOG_DEBUG("Cannot resolve base address: {}", mr.base);
         continue;
+      }
       state.addressSpace.resolveOne(ConstantExpr::create(mr.base, Expr::Int64),
                                     op);
       if (notSymbolicList.count(op.first->name) > 0) {
@@ -9346,7 +9560,7 @@ void Executor::runFunctionFromSnapshot(llvm::Function *f, int argc, char **argv,
   state->ptreeNode = processTree->root;
 
   // Load arguments from snapshot
-  initUniKleeAtEntry(*state, kf, baseSnapshot);
+  initUniKleeAtEntry(*state, kf);
   std::vector<ref<Expr>> argumentsExpr;
   state->targetStack.push_back(state->stack.back());
   state->targetStack.back().snapshot = baseSnapshot;
@@ -9478,7 +9692,7 @@ void Executor::runFunctionUnderConstrained(llvm::Function *f) {
   ExecutionState *state = new ExecutionState(kf);
   state->recursiveDepth = 1;
   // Load functions and external objects
-  initUniKleeAtEntry(*state, kf, baseSnapshot);
+  initUniKleeAtEntry(*state, kf);
   initializeUnderConstrained(*state);
 
   if (pathWriter)
@@ -9530,7 +9744,7 @@ void Executor::runFunctionUnderConstrained(llvm::Function *f) {
   }
   std::vector<ref<Expr>> argumentsExpr;
   state->targetStack.push_back(state->stack.back());
-  state->targetStack.back().snapshot = baseSnapshot;
+  // state->targetStack.back().snapshot = baseSnapshot;
 
   // Run the target function
   run(*state);

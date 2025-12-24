@@ -413,6 +413,8 @@ public:
   ConstraintManager shadowConstraintsForNewSymbolics;
   PatchDataManager patchDataManager;
   std::map<const MemoryObject *, uint64_t> lazyObjectSizeMap;
+  std::map<const MemoryObject *, AccessLog> writeAccessLog;
+  std::map<const MemoryObject *, AccessLog> baseWriteAccessLog;
 
   // Execution - Control Flow specific
 

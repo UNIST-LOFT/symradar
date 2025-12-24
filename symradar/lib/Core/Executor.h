@@ -653,8 +653,7 @@ public:
     replayPosition = 0;
   }
 
-  void initUniKleeAtEntry(ExecutionState &state, const KFunction *kf,
-                          Snapshot *snapshot);
+  void initUniKleeAtEntry(ExecutionState &state, const KFunction *kf);
 
   llvm::Module *setModule(std::vector<std::unique_ptr<llvm::Module>> &modules,
                           const ModuleOptions &opts) override;

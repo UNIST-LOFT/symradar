@@ -137,14 +137,6 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
     // operator new(unsigned long)
     add("_Znwm", handleNew, true),
 
-    // Run clang with -fsanitize=signed-integer-overflow and/or
-    // -fsanitize=unsigned-integer-overflow
-    add("__ubsan_handle_add_overflow", handleAddOverflow, false),
-    add("__ubsan_handle_sub_overflow", handleSubOverflow, false),
-    add("__ubsan_handle_mul_overflow", handleMulOverflow, false),
-    add("__ubsan_handle_divrem_overflow", handleDivRemOverflow, false),
-    add("__ubsan_handle_shift_out_of_bounds", handleShiftOverflow, false),
-
 #undef addDNR
 #undef add
 };
@@ -509,6 +501,7 @@ void SpecialFunctionHandler::handleMalloc(ExecutionState &state,
                                           std::vector<ref<Expr>> &arguments) {
   // XXX should type check args
   assert(arguments.size() == 1 && "invalid number of arguments to malloc");
+  SPDLOG_TRACE("[state {}] malloc size {}", state.getID(), arguments[0]->str());
   executor.executeAlloc(state, arguments[0], false, target);
 }
 
@@ -1109,9 +1102,11 @@ void SpecialFunctionHandler::handleRestoreConcrete(
     }
     ObjectState *wos = state.addressSpace.getWriteable(op.first, op.second);
     for (uint64_t i = offset; i < CE->getZExtValue(); i++) {
-      if (i < op.first->size && !ma.isConcreteAt(i)) {
+      if (i < op.first->size && i < ma.getConcreteSize() &&
+          !ma.isConcreteAt(i)) {
         ma.concretizeAt(i);
-        ref<Expr> value = ConstantExpr::create(ma.data[i], Expr::Int8);
+        ref<Expr> value =
+            ConstantExpr::create(ma.getConcreteValueAt(i), Expr::Int8);
         wos->write(i, value);
       }
     }
@@ -1154,6 +1149,9 @@ void SpecialFunctionHandler::handleUniKleePocRecordValue(
   std::string name = readStringAtAddress(state, arguments[3]);
   uint64_t loc = dyn_cast<ConstantExpr>(arguments[4])->getZExtValue();
   value = state.constraints.simplifyExpr(value);
+  SPDLOG_DEBUG("[state {}] uni_klee_poc_record_value: value {} size {} type "
+               "{} name {} loc {}",
+               state.getID(), value->str(), size, type, name, loc);
   if (!isa<ConstantExpr>(value)) {
     value = executor.getConcreteValue(state, arguments[0]);
     value = state.constraints.simplifyExpr(value);
@@ -1209,39 +1207,4 @@ void SpecialFunctionHandler::handleMarkGlobal(
     assert(!mo->isLocal);
     mo->isGlobal = true;
   }
-}
-
-void SpecialFunctionHandler::handleAddOverflow(
-    ExecutionState &state, KInstruction *target,
-    std::vector<ref<Expr>> &arguments) {
-  executor.terminateStateOnError(state, "overflow on addition",
-                                 Executor::Overflow);
-}
-
-void SpecialFunctionHandler::handleSubOverflow(
-    ExecutionState &state, KInstruction *target,
-    std::vector<ref<Expr>> &arguments) {
-  executor.terminateStateOnError(state, "overflow on subtraction",
-                                 Executor::Overflow);
-}
-
-void SpecialFunctionHandler::handleMulOverflow(
-    ExecutionState &state, KInstruction *target,
-    std::vector<ref<Expr>> &arguments) {
-  executor.terminateStateOnError(state, "overflow on multiplication",
-                                 Executor::Overflow);
-}
-
-void SpecialFunctionHandler::handleShiftOverflow(
-    ExecutionState &state, KInstruction *target,
-    std::vector<ref<Expr>> &arguments) {
-  executor.terminateStateOnError(state, "overflow on shift operation",
-                                 Executor::Overflow);
-}
-
-void SpecialFunctionHandler::handleDivRemOverflow(
-    ExecutionState &state, KInstruction *target,
-    std::vector<ref<Expr>> &arguments) {
-  executor.terminateStateOnError(state, "overflow on division or remainder",
-                                 Executor::Overflow);
 }

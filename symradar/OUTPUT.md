@@ -7,9 +7,9 @@ sympatch.py single /root/projects/CPR/patches/extractfix/libjpeg/CVE-2018-14498/
 # Build target programs
 symfeas.py build 14498
 # Run filter
-symradar.py filter 14498
+symvass.py filter 14498
 # Run experiment
-symradar.py rerun 14498 --sym-level=high -p high
+symvass.py rerun 14498 --sym-level=high -p high
 ```
 
 You can see this output:
