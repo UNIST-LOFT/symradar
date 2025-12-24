@@ -20,8 +20,8 @@ This directory contains benchmarks and scripts for experiments.
 This is example with one subject. Check [CPR directory](./CPR) to run full experiments.
 ### 1. Docker image for experiments
 ```shell
-docker pull symradar/symradar-replication:2025-07-22
-docker run -d -it --name symradar symradar/symradar-replication:2025-07-22 bash
+docker pull hsh814/symradar:2025-12-24
+docker run -d -it --name symradar hsh814/symradar:2025-12-24 bash
 ```
 
 ### 2. Running a simple example (libjpeg/CVE-2018-14498)

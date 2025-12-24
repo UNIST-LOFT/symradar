@@ -2,6 +2,10 @@
 ## Getting Started
 In `scripts` directory, there are 3 main scripts and 1 `experiments.py` script for parallel execution.
 Run `export PATH=/root/projects/CPR/scripts:$PATH` to use them.
+```shell
+docker pull hsh814/symradar:2025-12-24
+docker run -d -it --name symradar hsh814/symradar:2025-12-24 bash
+```
 
 ### 1. `sympatch.py`
 This script extract concrete patches from `CPR` generated patches and convert them into meta program. Extraction is already done, so you only need to run `compile`.
