@@ -1,0 +1,26 @@
+#!/bin/bash
+CPR_DIR=${CPR_DIR:-/root/projects/CPR}
+PATH=$PATH:$CPR_DIR/tools
+rm -rf dafl-src dafl-patched
+mkdir -p dafl-patched
+project_url=https://github.com/vadz/libtiff.git
+commit_id=f3069a5
+patched_dir=tools
+patched_file=tiff2ps.c
+bin_dir=tools
+bin_file=tiff2ps
+git clone $project_url dafl-src
+pushd dafl-src
+  git checkout $commit_id
+  # Patch
+  cp "../${patched_file%.c}.afl.c" ${patched_dir}/${patched_file}
+  # Remove longjmp calls
+  sed -i '118d;221d' libtiff/tif_jpeg.c
+  sed -i '153d;2463d' libtiff/tif_ojpeg.c
+  sed -i 's|fabs_cpr|fabs|g' $patched_dir/$patched_file
+  ./autogen.sh
+  CC=clang CXX=clang++ ./configure --enable-static --disable-shared --without-threads --without-lzma
+  CC=clang CXX=clang++ make LDFLAGS="-no-pie" CFLAGS="-static -fsanitize=address -g" CXXFLAGS="-static -fsanitize=address -g" -j10
+  # cp
+  cp ${bin_dir}/${bin_file} ../dafl-patched/bin
+popd

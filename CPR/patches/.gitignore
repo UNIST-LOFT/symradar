@@ -14,7 +14,13 @@ concrete-inputs/
 */*/*/build
 */*/*/source
 */*/*/patched
+*/*/*/pacfix
+*/*/*/pc-src
+*/*/*/pc-runtime
 */*/*/val-*
+*/*/*/poc-*
+*/*/*/test-*
+*/*/*/vrpilot-*
 */*/*/*-bak
 */*/*/repair-out
 */*/*/runtime
@@ -27,3 +33,11 @@ output-2025-04-07
 output-2025-04-11
 vulmaster-patched/
 vulmaster-src/
+vrpilot-src/
+vrpilot-patched/
+crashrepair-src/
+crashrepair-patched/
+san2patch-src/
+san2patch-patched/
+afl-init.log
+trace-diff.sbsv

@@ -1,233 +1,217 @@
 # CPR Benchmark
-Benchmark used in CPR.
-
-## Simple Example
-
-```shell
-export PATH=/root/projects/CPR/scripts:$PATH
-
-# 1. Compile patches
-sympatch.py compile patches
-
-# 2. Build the target program
-symutil.py build 19664 # Or run ./init.sh
-
-# 3. Obtain plausible patches
-symradar.py filter 19664
-
-# 4. Run SymRadar and analyze the result
-symradar.py snapshot 19664 -p high
-symradar.py run 19664 --sym-level=high -p high
-symradar.py analyze 19664 -p high
-
-# 5. The output table can be found in:
-#    patches/extractfix/libjpeg/CVE-2018-19664/patched/high-*/table_v3.sbsv
-```
-Click [here](../uni-klee/OUTPUT.md) for how to interpret result.
-
-## Experiment Replication
-Use `experiments.py` to run experiments for all subjects in the benchmark in parallel.
-This script calls `python3 <script> <cmd> <subject>` for each subject.
-```shell
-export PATH=/root/projects/CPR/scripts:$PATH
-
-# 1. Compile patches
-sympatch.py compile patches
-
-# 2. Build subjects
-experiments.py util --extra build
-
-# 3. Run the filter step for all subjects
-experiments.py filter
-
-# 4. Run SymRadar for all subjects
-experiments.py exp --extra high -s high
-experiments.py analyze -s high
-
-# 5. Collect final results (check the ./out directory)
-experiments.py final -s high
-```
-
-## Script commands and options
-The scripts directory contains three main scripts (sympatch.py, symutil.py, symradar.py) and the experiments.py script for parallel execution across multiple subjects.
-Ensure the scripts directory is in your PATH: `export PATH=/root/projects/CPR/scripts:$PATH`.
+## Getting Started
+In `scripts` directory, there are 3 main scripts and 1 `experiments.py` script for parallel execution.
+Run `export PATH=/root/projects/CPR/scripts:$PATH` to use them.
 
 ### 1. `sympatch.py`
-This script extracts concrete patches from CPR-generated patch files and converts them into a meta-program format. The extraction process is already completed; you only need to run the compile command to process the patches for all subjects found in the specified directory.
+This script extract concrete patches from `CPR` generated patches and convert them into meta program. Extraction is already done, so you only need to run `compile`.
+Build patch of all subjects.
 ```shell
-# Usage: sympatch.py <cmd> <patch-dir>
-# Example: Compile patches located in the 'patches' directory
+# sympatch.py <cmd> <patch-dir>
 sympatch.py compile patches
 ```
-### 2. `symutil.py`
-This script provides utility functions for building subjects.
+### 2. `symfeas.py`
+This script was for feasiblity check.
 ```shell
-# Usage: symutil.py <cmd> <subject>
-# Example: Build a specific subject
-symutil.py build <subject>
+symradar.py <cmd> <subject> <options>
 ```
 
 ### 3. `symradar.py`
-This is the main script for running the `SymRadar` analysis. It invokes `uni-klee` with the appropriate options and analyzes the results.
+This is the main script for `SymRadar`. It runs `uni-klee` with proper options and analyze the results.
 ```shell
-# Usage: symradar.py <cmd> <subject> [options]
-symradar.py filter <subject>
-symradar.py snapshot <subject> -p high
-symradar.py run <subject> -p high
-symradar.py uc <subject> -p uc
-symradar.py analyze <subject> -p high
+symradar.py <cmd> <subject> <options>
 ```
-Note: For `symutil.py` and `symradar.py`, you can specify a subject using only a unique part of its name (e.g., 14498 will be recognized as CVE-2018-14498).
 
-#### `symradar.py` Commands (`<cmd>`):
-- filter: Filters patches using concrete inputs.
-- snapshot: Extract concrete snapshot.
-- run/rerun: Executes the main SymRadar analysis. `run` reuses an existing KLEE state snapshot if available, while `rerun` always starts fresh (deleting any existing snapshot).
-- analyze: Analyzes the results (`data.log` in output directory) from a run or rerun execution.
-- uc: Enables UC-KLEE mode (details assumed specific to the project).
-
-#### `symradar.py` Options (`[options]`):
-- `-p <prefix>`: Prefix for the output directory (used by analyze to find results, potentially by run/rerun implicitly).
-- `--snapshot-prefix <prefix>`: Prefix for the snapshot directory (used by run/rerun).
-- `--sym-level <level>`: Sets the symbolization level (e.g., none, high). We used high in our experiments.
-- `-t <timeout>`: Sets the timeout duration (e.g., 12h for 12 hours).
+In `symfeas.py` and `symradar.py`, you can enter `subject` only part of their name.
+For example, `3623` will be recognized as `CVE-2016-3623`.
 
 ### 4. `experiments.py`
-This script automates running commands (like build, filter, analyze) across all subjects (28 by default) in parallel.
+This is the script for running experiments on all subjects. By default, it runs all 28 subjects in parallel.
 ```shell
-# Usage: experiments.py <cmd> [options]
-experiments.py util --extra build
-experiments.py filter
-experiments.py exp --extra high -s high
-experiments.py analyze -s high
-experiments.py final -s high
+experiments.py <cmd> <options>
 ```
-#### `experiments.py` Main Options:
-- `--extra <value>`: Provides necessary arguments to the underlying script command being called (e.g., build type, sym-level). The required value depends on the specific `<cmd>`.
-- `-s <prefix>`: Specifies the directory prefix used for SymRadar outputs and snapshots when calling symradar.py.
 
-#### `experiments.py` Commands (`<cmd>`)
-* `util`: Calls `symutil.py`.
-  - Values for `--extra`:
-    - `build`: Build target program.
+### Example
 
-* `filter`: Calls `symradar.py`. The `--extra` option is not needed.
-
-* `run`/`exp`: Calls `symradar.py run` or `symradar.py rerun` for snapshot extraction and symbolic execution. These commands automatically run `snapshot` to extract concrete snapshot if they do not exists. If there is an existing snapshot, `run` reuses the snapshot and `exp` deletes and recreates the snapshot before running symbolic execution.
-  - Values for `--extra`:
-    - `high`: We used this option, which corresponds to `--sym-level=high`.
-
-* `uc`: Calls `symradar.py`, run target program in `UC-KLEE` mode.
-
-* `analyze`: Calls `symradar.py`. Analysis usually runs automatically after `run`/`exp`, but this command ensures it's done, especially if a run timed out. Recommended before running `final`.
-
-* `final`: Collects results generated by analyze from the individual subject directories (identified by the `-s <prefix>`) and aggregates them into a single summary file (in the ./out directory).
-
-## Other experiments
-### `UC-KLEE`
 ```shell
 export PATH=/root/projects/CPR/scripts:$PATH
+# 1. Compile patches
 sympatch.py compile patches
-experiments.py util --extra build
+
+# 2. Build
+symfeas.py build 3623 # Or run ./init.sh
+
+# 3. Run filter
+symradar.py filter 3623
+# symradar.py analyze 3623 -p filter 
+
+# 4. Run symradar
+symradar.py rerun 3623 --sym-level=high -s high
+symradar.py analyze 3623 -s high
+
+# 5. The output is in patches/extractfix/libtiff/CVE-2016-3623/patched/high-*/table_v3.sbsv
+```
+
+
+## Experiment Replication
+Use `experiments.py` to run experiments for all subjects in benchmark in parallel.
+```shell
+export PATH=/root/projects/CPR/scripts:$PATH
+# 1. Compile patches
+sympatch.py compile patches
+
+# 2. Build
+experiments.py feas --extra build
+
+# 3. Run filter
 experiments.py filter
+experiments.py analyze --extra analyze -s filter
 
-# Run with uc
-experiments.py uc -s uc
-experiments.py analyze -s uc
-experiments.py final -s uc
+# 4. Run SymRadar
+experiments.py exp --extra high
+experiments.py analyze --extra analyze -s high
+
+# 5. Collect results (check ./out directory)
+experiments.py final -s high
 ```
 
-## Environment Setup
+Old
+```
+# 5. Run fuzzer (for single)
+symfeas.py fuzz-build 5321 # ./aflrun.sh
+symfeas.py fuzz 5321
+symfeas.py collect-inputs 5321
+# 5. Run fuzzer (for all)
+experiments.py feas --extra fuzz
+experiments.py feas --extra collect-inputs
+experiments.py feas --extra fuzz-build
 
-### Environment Setup
-Build [`uni-klee`](../uni-klee) first.
+# 6. Symbolic input validation (for single)
+symradar.py symgroup 5321
+symradar.py symgroup 5321 -p high
+symfeas.py val-build 5321 -s high # ./val.sh, Some subjects requires uni-klee-out-dir/base-mem.symbolic-globals - Run symradar first to generate output directory and files
+symfeas.py val 5321
+symfeas.py val 5321 -s high
+symfeas.py feas 5321
+symfeas.py feas 5321 -s high
+# 6. Symbolic input validation (for all)
+experiments.py analyze --extra symgroup
+experiments.py analyze --extra symgroup -s high
+experiments.py feas --extra val-build -s high
+experiments.py feas --extra val
+experiments.py feas --extra val -s high
+exepriments.py feas --extra feas
+exepriments.py feas --extra feas -s high
+
+# 7. Analyze input validation: Check ./out directory and get results
+experiments.py feas --extra analyze --seq --output out.csv
+experiments.py feas --extra analyze -s high --seq --output out-high.csv
+```
+
+## Test
+First, filter out patches that fails on test
+```shell
+python3 scripts/meta-program.py filter 5321
+```
+
 
 ```shell
-# Install python 3.8
-python3 -m pip install -r requirements.txt
-apt-get update && apt-get install -y  \
-    autopoint \
-    automake \
-    bison \
-    flex \
-    gettext \
-    gperf \
-    libass-dev \
-    libfreetype6 \
-    libfreetype6-dev \
-    libjpeg-dev \
-    libtool \
-    libxml2-dev \
-    liblzma-dev \
-    nasm \
-    pkg-config \
-    texinfo \
-    yasm \
-    xutils-dev \
-    libpciaccess-dev \
-    libpython2-dev \
-    libpython3-dev \
-    libx11-dev \
-    libxcb-xfixes0-dev \
-    libxcb1-dev \
-    libxcb-shm0-dev \
-    libsdl1.2-dev  \
-    libvdpau-dev \
-    libnuma-dev
+python3 scripts/meta-test.py run 5321:0,1,2,3,4
 ```
 
-### lib
-```
-cd /root/projects/CPR/lib
-make
-```
-Other requirements are pre-built in lib/.
+[![Docker Pulls](https://img.shields.io/docker/pulls/rshariffdeen/cpr.svg)](https://hub.docker.com/r/rshariffdeen/cpr) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4668317.svg)](https://doi.org/10.5281/zenodo.4668317)
 
-zlib
-```shell
-wget https://zlib.net/zlib-1.3.tar.gz
-tar -xzvf zlib-1.3.tar.gz
-cd zlib-1.3
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=wllvm ..
-make -j 32
-extract-bc libz.a
-cp libz.bca ../..
-```
+# CPR - CardioPulmonary Resuscitation
+CPR: A new automated program repair technique based on concolic execution
+which works on patch abstraction with the sub-optimal goal of refining the patch to less over-fit 
+the initial test cases. 
 
-liblzma
-```shell
-git clone https://github.com/kobolabs/liblzma.git
-cd liblzma
-git checkout 87b7682ce4b1c849504e2b3641cebaad62aaef87
-CC=wllvm CXX=wllvm++ CFLAGS="-O0 -g" ./configure --disable-nls --disable-shared --disable-threads
-make -j 32
-cd src/liblzma/.libs
-extract-bc liblzma.a
-cp liblzma.bca ../../../..
-```
+Automated program repair reduces the manual effort in fixing program errors. 
+However, existing repair techniques modify a buggy program such that it passes given tests.
+Such repair techniques do not discriminate between correct patches and patches that overfit
+the available tests and break untested but desired functionality. We attempt to solve this
+problem with a novel solution that make use of the duality of space exploration in Input 
+Space and Program Space. We implemented our technique in the form of a tool called CPR and
+evaluated its efficacy in reducing the patch space by discarding overfitting patches from 
+a pool of plausible patches. Similar to Cardio-Pulmonary Resuscitation (CPR) does to a
+patient, our tool CPR resuscitate or recover programs via appropriate fixes. 
 
-glibc
-```shell
-git clone https://sourceware.org/git/glibc.git
-cd glibc
-git switch release/2.34/master
+In this work, we therefore propose and implement an integrated approach for detecting and discarding 
+overfitting patches by exploiting the relationship between the patch space and input space.
+We leverage concolic path exploration to systematically traverse the input space 
+(and generate inputs), while systematically ruling out significant parts of the patch space.
+Given a long enough time budget, this approach allows a significant reduction in the 
+pool of patch candidates, as shown by our experiments. 
 
-```
+CPR is a reconfigurable APR tool for C source-codes. CPR is:
 
-openlibm
-```shell
-git clone https://github.com/JuliaMath/openlibm.git
-cd openlibm
-git checkout 12f5ffcc990e16f4120d4bf607185243f5affcb8
-```
+* Extensible: CPR is designed so that it can be easily extended to plug in any component to replace existing
+* Efficient: CPR utilize parallel computing to improve performance
 
-#### 8.3. Environment variables
-```shell
-export LLVM_COMPILER=clang
-export CPR_CC=/root/projects/CPR/tools/cpr-cc
-export CPR_CXX=/root/projects/CPR/tools/cpr-cxx
-export PATH=$PATH:/root/projects/uni-klee/scripts:/root/projects/CPR/scripts:/root/projects/CPR/tools
-export LD_LIBRARY_PATH=/root/projects/CPR/lib:/root/projects/uni-klee/build/lib:$LD_LIBRARY_PATH
-```
-Add this to the `~/.bashrc`.
+
+
+
+## Build and Dependencies
+We provide a ready-made container which includes all necessary envrionment set-up
+to deploy and run our tool. Dependencies include:
+
+* LLVM 3.4
+* KLEE 1.4
+* Python 3.7
+* Z3 SMT Solver
+* MathSAT Solver
+* Docker
+
+Build and run a container:
+
+    docker build -t cpr .
+    docker run --rm -ti cpr /bin/bash
+
+
+# Example
+We provide several examples you can run to test our tool, all test cases are included
+in the 'tests' directory. 
+
+Run examples:
+
+    pypy3 CPR.py --conf=tests/bug-types/div-zero/div-zero-1/repair.conf
+    pypy3 CPR.py --conf=tests/bug-types/div-zero/div-zero-2/repair.conf
+
+
+## Documentation ##
+
+* [Getting Started](doc/GetStart.md)
+* [Example Usage](doc/Examples.md)
+* [Experiment Replication](experiments/README.md)  
+* [Manual](doc/Manual.md)
+
+
+## Bugs ##
+CPR should be considered alpha-quality software. Bugs can be reported here:
+
+    https://github.com/rshariffdeen/CPR/issues
+    
+# Contributions
+We welcome contributions to improve this work, see [details](doc/Contributing.md)
+
+## Developers
+* Ridwan Shariffdeen
+* Yannic Noller
+
+## Contributors
+* Sergey Mechtaev 
+
+## Publication ##
+**Concolic Program Repair** <br>
+Ridwan Shariffdeen, Yannic Noller, Lars Grunske, Abhik Roychoudhury <br>
+42nd ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI), 2021
+
+
+## Acknowledgements ##
+This work was partially supported by the National Satellite of Excellence in Trustworthy Software Systems, funded by National Research Foundation (NRF) Singapore. 
+
+
+# License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+
+

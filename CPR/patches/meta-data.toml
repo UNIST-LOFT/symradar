@@ -5,6 +5,8 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "readSeparateTilesIntoBuffer"
+vrpilot = 1
+san2patch = 0
 
   [meta_data.buggy]
   code = "(1)"
@@ -22,6 +24,7 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "setImage1"
+vrpilot = 2
 
   [meta_data.buggy]
   code = "(1)"
@@ -39,6 +42,7 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "readextension"
+vrpilot = 0
 
   [meta_data.buggy]
   code = "(1)"
@@ -56,6 +60,7 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y", "z",]
 target = "PixarLogDecode"
+vrpilot = 1
 
   [meta_data.buggy]
   code = "(0)"
@@ -73,6 +78,8 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "TIFFNumberOfStrips"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -90,6 +97,8 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "PSDataColorContig"
+vrpilot = 2
+san2patch = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -107,6 +116,8 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "t2p_readwrite_pdf_image_tile"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(x >= 4)"
@@ -124,6 +135,8 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "JPEGSetupEncode"
+vrpilot = 2
+san2patch = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -141,6 +154,7 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "cvtRaster"
+vrpilot = 1
 
   [meta_data.buggy]
   code = "(0)"
@@ -158,6 +172,8 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "JPEGSetupEncode"
+vrpilot = 2
+san2patch = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -175,6 +191,8 @@ benchmark = "extractfix"
 subject = "libtiff"
 vars = [ "x", "y",]
 target = "OJPEGDecodeRaw"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -192,6 +210,7 @@ benchmark = "extractfix"
 subject = "binutils"
 vars = [ "x", "y", "z",]
 target = "process_cu_tu_index"
+vrpilot = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -209,6 +228,8 @@ benchmark = "extractfix"
 subject = "binutils"
 vars = [ "x", "y",]
 target = "decode_line_info"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -226,6 +247,7 @@ benchmark = "extractfix"
 subject = "libxml2"
 vars = [ "x", "y",]
 target = "xmlStrncat"
+vrpilot = 1
 
   [meta_data.buggy]
   code = "(0)"
@@ -243,6 +265,8 @@ benchmark = "extractfix"
 subject = "libxml2"
 vars = [ "x", "y", "z",]
 target = "xmlParseEndTag2"
+vrpilot = 2
+san2patch = 0
 
   [meta_data.buggy]
   code = "(1)"
@@ -260,6 +284,8 @@ benchmark = "extractfix"
 subject = "libxml2"
 vars = [ "x", "y", "z",]
 target = "htmlParseNameComplex"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -277,6 +303,8 @@ benchmark = "extractfix"
 subject = "libxml2"
 vars = [ "x", "y",]
 target = "xmlParseAttValueComplex"
+vrpilot = 1
+san2patch = 0
 
   [meta_data.buggy]
   code = "(1)"
@@ -294,6 +322,8 @@ benchmark = "extractfix"
 subject = "libxml2"
 vars = [ "x", "y",]
 target = "xmlDumpElementContent"
+vrpilot = 1
+san2patch = 0
 
   [meta_data.buggy]
   code = "0"
@@ -312,6 +342,8 @@ benchmark = "extractfix"
 subject = "libjpeg"
 vars = [ "x", "t",]
 target = "get_8bit_row"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -329,6 +361,8 @@ benchmark = "extractfix"
 subject = "libjpeg"
 vars = [ "x", "y",]
 target = "jinit_write_bmp"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(1)"
@@ -346,6 +380,8 @@ benchmark = "extractfix"
 subject = "libjpeg"
 vars = [ "x", "t",]
 target = "quantize_ord_dither"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(0)"
@@ -363,6 +399,8 @@ benchmark = "extractfix"
 subject = "libjpeg"
 vars = [ "x", "t",]
 target = "get_sos"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(1)"
@@ -380,6 +418,8 @@ benchmark = "extractfix"
 subject = "coreutils"
 vars = [ "size", "i",]
 target = "fillpattern"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(size / 2 > i)"
@@ -397,6 +437,8 @@ benchmark = "extractfix"
 subject = "coreutils"
 vars = [ "start", "initial_read", "bufsize",]
 target = "bytes_chunk_extract"
+vrpilot = 1
+san2patch = 0
   
   [meta_data.buggy]
   code = "(initial_read != 18446744073709551615UL || start < initial_read)"
@@ -414,6 +456,8 @@ benchmark = "extractfix"
 subject = "coreutils"
 vars = [ "col_sep_length",]
 target = "init_parameters"
+vrpilot = 0
+san2patch = 0
 
   [meta_data.buggy]
   code = "(1)"
@@ -431,6 +475,8 @@ benchmark = "extractfix"
 subject = "coreutils"
 vars = [ "size", "i",]
 target = "main"
+vrpilot = 0
+san2patch = 0
   
     [meta_data.buggy]
     code = "(1)"
@@ -448,6 +494,7 @@ benchmark = "extractfix"
 subject = "jasper"
 vars = [ "x", "y",]
 target = "jpc_siz_getparms"
+vrpilot = 1
 
   [meta_data.buggy]
   code = "(0)"
@@ -465,6 +512,7 @@ benchmark = "extractfix"
 subject = "jasper"
 vars = [ "x", "y", "z",]
 target = "jpc_dec_process_siz"
+vrpilot = 2
 
   [meta_data.buggy]
   code = "(0)"
@@ -609,3 +657,484 @@ benchmark = "manybugs"
 subject = "libtiff"
 vars = [ "x", "y", "z",]
 
+
+[[meta_data]]
+id = 50
+bug_id = "CVE-2017-6965"
+benchmark = "vulnloc"
+subject = "binutils"
+vars = [ "x", "y", "z", "m" ]
+target = "target_specific_reloc_handling"
+vrpilot = 0
+san2patch = 4
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+  [meta_data.correct]
+  code = "(x + z + m >= y)"
+  id = "correct"
+  no = 123
+  incomplete = true
+
+[[meta_data]]
+id = 51
+bug_id = "CVE-2017-14745"
+benchmark = "vulnloc"
+subject = "binutils"
+vars = [ "x", "y", "z", "m", "n"]
+target = "elf_x86_64_get_synthetic_symtab"
+vrpilot = 1
+san2patch = 0
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+  [meta_data.correct]
+  code = "(x < 0)"
+  id = "correct"
+  no = 693
+  incomplete = false
+
+[[meta_data]]
+id = 52
+bug_id = "CVE-2016-9557"
+benchmark = "vulnloc"
+subject = "jasper"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "jas_image_create"
+vrpilot = 2
+crashrepair = 4
+san2patch = 15
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+  # [meta_data.correct]
+  # code = "(x * y * (z + 7) < 9223372036854775807L *2UL+1UL)"
+  # id = "correct"
+  # no = 97
+  # incomplete = false
+
+
+[[meta_data]]
+id = 53
+bug_id = "CVE-2016-5844"
+benchmark = "vulnloc"
+subject = "libarchive"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "choose_volume"
+poc = 1
+crashrepair = 2
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+
+[[meta_data]]
+id = 54
+bug_id = "CVE-2016-9264"
+benchmark = "vulnloc"
+subject = "libming"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "printMP3Headers"
+vrpilot = 1
+crashrepair = 2
+san2patch = 6
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+  [meta_data.correct]
+  code = "(x < 0 || x > 2)"
+  id = "correct"
+  no = 693
+  incomplete = false
+
+[[meta_data]]
+id = 55
+bug_id = "CVE-2016-9532"
+benchmark = "vulnloc"
+subject = "libtiff"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "writeBufferToSeparateStrips"
+crashrepair = 2
+san2patch = 31
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+  # [meta_data.correct]
+  # code = "(x * y * (z + 1) < n)"
+  # id = "correct"
+  # no = 97
+  # incomplete = true
+
+[[meta_data]]
+id = 56
+bug_id = "CVE-2016-10092"
+benchmark = "vulnloc"
+subject = "libtiff"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "readContigStripsIntoBuffer"
+poc = 8
+crashrepair = 14
+san2patch = 0
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+
+
+[[meta_data]]
+id = 57
+bug_id = "CVE-2016-10272"
+benchmark = "vulnloc"
+subject = "libtiff"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "readContigStripsIntoBuffer"
+poc = 0
+crashrepair = 3
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+
+
+[[meta_data]]
+id = 58
+bug_id = "CVE-2017-5225"
+benchmark = "vulnloc"
+subject = "libtiff"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "cpContig2SeparateByRow"
+poc = 14
+crashrepair = 3
+san2patch = 16
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+
+# [[meta_data]]
+# id = 59
+# bug_id = "CVE-2017-5974"
+# benchmark = "vulnloc"
+# subject = "zziplib"
+# vars = [ "x", "y", "z", "m", "n" ]
+# target = "zzip_mem_entry_new"
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+#   [meta_data.correct]
+#   code = "(n > z)"
+#   id = "correct"
+#   no = 3923
+#   incomplete = false
+
+[[meta_data]]
+id = 60
+bug_id = "CVE-2017-5975"
+benchmark = "vulnloc"
+subject = "zziplib"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "zzip_mem_entry_new"
+crashrepair = 3
+san2patch = 6
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+#   [meta_data.correct]
+#   code = "(m == n)"
+#   id = "correct"
+#   no = 662
+#   incomplete = false
+
+[[meta_data]]
+id = 61
+bug_id = "CVE-2017-5976"
+benchmark = "vulnloc"
+subject = "zziplib"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "zzip_mem_entry_extra_block"
+# crashrepair = 13
+san2patch = 8
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+#   [meta_data.correct]
+#   code = "(m == n)"
+#   id = "correct"
+#   no = 662
+#   incomplete = false
+
+[[meta_data]]
+id = 62
+bug_id = "CVE-2013-7437"
+benchmark = "vulnloc"
+subject = "potrace"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "bm_readbody_bmp"
+poc = 14
+crashrepair = 7
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+
+[[meta_data]]
+id = 63
+bug_id = "CVE-2017-7599"
+benchmark = "vulnloc"
+subject = "libtiff"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "TIFFWriteDirectoryTagSampleformatArray"
+crashrepair = 3
+san2patch = 2
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+
+[[meta_data]]
+id = 64
+bug_id = "CVE-2017-7600"
+benchmark = "vulnloc"
+subject = "libtiff"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "TIFFWriteDirectoryTagSampleformatArray"
+crashrepair = 9
+san2patch = 2
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+
+
+# [[meta_data]]
+# id = 62
+# bug_id = "CVE-2020-14163"
+# benchmark = "bugscpp"
+# subject = "jerryscript"
+# target = "ecma_op_internal_buffer_append"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 63
+# bug_id = "CVE-2021-41682"
+# benchmark = "bugscpp"
+# subject = "jerryscript"
+# target = "vm_loop"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 64
+# bug_id = "CVE-2021-41751"
+# benchmark = "bugscpp"
+# subject = "jerryscript"
+# target = "ecma_builtin_array_prototype_object_slice"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 65
+# bug_id = "CVE-2021-41959"
+# benchmark = "bugscpp"
+# subject = "jerryscript"
+# target = "ecma_regexp_match_helper"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 66
+# bug_id = "CVE-2021-44988"
+# benchmark = "bugscpp"
+# subject = "jerryscript"
+# target = "ecma_builtin_array_flatten_into_array"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 67
+# bug_id = "CVE-2021-44994"
+# benchmark = "bugscpp"
+# subject = "jerryscript"
+# target = "ecma_atomic_read_modify_write"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 68
+# bug_id = "CVE-2022-22893"
+# benchmark = "bugscpp"
+# subject = "jerryscript"
+# target = "ecma_op_function_construct"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 69
+# bug_id = "CVE-2022-22901"
+# benchmark = "bugscpp"
+# subject = "jerryscript"
+# target = "lexer_expect_object_literal_id"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 70
+# bug_id = "CVE-2018-11536"
+# benchmark = "bugscpp"
+# subject = "md4c"
+# target = "md_split_simple_pairing_mark"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 71
+# bug_id = "CVE-2018-11546"
+# benchmark = "bugscpp"
+# subject = "md4c"
+# target = "md_process_inlines"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 72
+# bug_id = "CVE-2018-12102"
+# benchmark = "bugscpp"
+# subject = "md4c"
+# target = "md_analyze_line"
+# poc = 1
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+
+[[meta_data]]
+id = 73
+bug_id = "CVE-2016-10266"
+benchmark = "magma"
+subject = "libtiff"
+vars = [ "x", "y", "z", "m", "n" ]
+target = "TIFFReadEncodedStrip"
+poc = 6
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+
+[[meta_data]]
+id = 74
+bug_id = "CVE-2016-1840"
+benchmark = "magma"
+subject = "libxml2"
+vars = [ "x", "y",]
+target = "xmlFAParseCharRange"
+poc = 8
+
+  [meta_data.buggy]
+  code = "(1)"
+  id = "buggy"
+
+[[meta_data]]
+id = 75
+bug_id = "CVE-2017-8872"
+benchmark = "magma"
+subject = "libxml2"
+vars = [ "x", "y",]
+target = "xmlHaltParser"
+poc = 1
+
+  [meta_data.buggy]
+  code = "(1)"
+  id = "buggy"
+
+[[meta_data]]
+id = 76
+bug_id = "CVE-2017-15020"
+benchmark = "vulnloc"
+subject = "binutils"
+vars = [ "x", "y",]
+target = "parse_die"
+poc = 0
+san2patch = 0
+
+  [meta_data.buggy]
+  code = "(0)"
+  id = "buggy"
+
+# [[meta_data]]
+# id = 77
+# bug_id = "CVE-2017-"
+# benchmark = "other"
+# subject = "binutils"
+# vars = [ "x", "y",]
+# target = ""
+# poc = 0
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 78
+# bug_id = "CVE-2017-"
+# benchmark = "other"
+# subject = "binutils"
+# vars = [ "x", "y",]
+# target = ""
+# poc = 0
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"
+
+# [[meta_data]]
+# id = 79
+# bug_id = ""
+# benchmark = "other"
+# subject = "libtiff"
+# vars = [ "x", "y",]
+# target = ""
+# poc = 0
+
+#   [meta_data.buggy]
+#   code = "(0)"
+#   id = "buggy"

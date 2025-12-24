@@ -221,7 +221,7 @@ class ConfigFiles:
     dirs.sort(key=self.sorting_key)
     print_log(dirs)
     for d in dirs:
-      if name.startswith("snapshot") or name not in d:
+      if d.startswith("snapshot") or name not in d:
         continue
       index += 1
       result.append((d, index))
@@ -244,6 +244,8 @@ class ConfigFiles:
   def read_meta_data(self) -> dict:
     return self.global_config.meta_data
   def read_meta_program(self) -> dict:
+    if not os.path.exists(self.meta_program):
+      return {}
     with open(self.meta_program, "r") as f:
       return json.load(f)
   def get_log_dir(self) -> str:
@@ -271,6 +273,15 @@ class Config:
   timeout: str
   
   def get_patch_ids(self, patch_ids: List[str]) -> List[str]:
+    plausible_file = os.path.join(self.conf_files.project_dir, "plausible.json")
+    if os.path.exists(plausible_file):
+      with open(plausible_file, "r") as f:
+        data = json.load(f)
+        result = ["0"]
+        for patch in data["plausible_patches"]:
+          result.append(str(patch))
+        return result
+    print_log(f"WARNING!!!: No such file {plausible_file}")
     self.meta_program = self.conf_files.read_meta_program()
     result = list()
     for patch_id in patch_ids:
